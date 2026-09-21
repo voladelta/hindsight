@@ -14,8 +14,8 @@ import {
   DAY,
   HOUR,
   evaluateRule,
+  dexEvidence,
   holderEvidence,
-  measurement,
   timePolicy,
   visibleChart,
 } from "../../src/domain/engine";
@@ -82,10 +82,16 @@ export function fixtureScenario(
     ),
   );
   const evidence = {
-    flowUsd: measurement(
-      kind === "null-evidence" ? null : kind === "falling" ? -420000 : 1240000,
+    ...dexEvidence(
+      kind === "null-evidence"
+        ? null
+        : Array.from({ length: 3 }, () => ({
+            boughtTokens: kind === "falling" ? 10 : 100,
+            soldTokens: kind === "falling" ? 100 : 10,
+            grossUsd: 1000,
+          })),
     ),
-    ...holderEvidence(
+    concentrationPercent: holderEvidence(
       Array.from({ length: 10 }, (_, holderIndex) => ({
         address: `invented-holder-${holderIndex}`,
         amount: 1000000 - holderIndex * 50000,
@@ -93,7 +99,7 @@ export function fixtureScenario(
         change7d: kind === "falling" ? -25000 : 18600,
       })),
       true,
-    ),
+    ).concentrationPercent,
   };
   visibleChart(history, times.cutoff, assumptions);
 

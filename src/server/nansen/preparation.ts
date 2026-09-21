@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import {
   intradayAssumptions,
+  DEX_SCHEMA_VERSION,
   scenarioSchema,
   sevenDayAssumptions,
   type RoundDuration,
@@ -17,7 +18,7 @@ import {
   evaluateRule,
   executionPrices,
   holderEvidence,
-  measurement,
+  dexEvidence,
   timePolicy,
   visibleChart,
 } from "../../domain/engine";
@@ -25,7 +26,9 @@ import { inputs, outcomes, type Store } from "../db";
 import type { NansenClient } from "./client";
 import {
   hasProviderWarnings,
-  normalizeFlow,
+  normalizeDex,
+  DEX_NORMALIZER_VERSION,
+  SMART_TRADER_LABELS,
   normalizeHolders,
   normalizePrices,
   normalizeUniverse,
@@ -33,7 +36,7 @@ import {
 } from "./contracts";
 
 export const CORPUS_CONFIG = {
-  version: "multichain-volume-uniform-v2",
+  version: "chain-specific-volume-uniform-v5",
   seed: "hindsight-2026-v1",
   fromDate: "2025-04-01",
   toDate: "2026-08-31",
@@ -126,12 +129,19 @@ export async function prepareOne(options: {
     timeframe: intraday ? "1h" : "1d",
     date: { from: historyFrom, to: historyTo },
   });
-  const flowRaw = await request("flow", {
+  const dexRequest = {
     chain: network,
     token_address: tokenAddress,
     date_range: { from: flowFrom, to: flowTo },
-    apply_blacklist_filter: true,
-  });
+    filters: {
+      include_labels: SMART_TRADER_LABELS,
+      trade_volume_usd: { min: 10 },
+    },
+    pagination: { page: 1, per_page: 1000 },
+    order_by: [{ field: "gross_volume_usd", direction: "DESC" }],
+  };
+  const buyRaw = await request("dex", { ...dexRequest, buy_or_sell: "BUY" });
+  const sellRaw = await request("dex", { ...dexRequest, buy_or_sell: "SELL" });
   const holdersRaw = await request("holders", {
     chain: network,
     token_address: tokenAddress,
@@ -144,9 +154,13 @@ export async function prepareOne(options: {
   const historyResult = normalizePrices(historyRaw, candleMilliseconds);
   visibleChart(historyResult.candles, times.cutoff, config);
   const holderResult = normalizeHolders(holdersRaw);
+  const dexResult = normalizeDex(buyRaw, sellRaw, network);
   const evidence = {
-    flowUsd: measurement(normalizeFlow(flowRaw)),
-    ...holderEvidence(holderResult.holders, holderResult.sortVerified),
+    ...dexEvidence(dexResult.wallets, dexResult.reason),
+    concentrationPercent: holderEvidence(
+      holderResult.holders,
+      holderResult.sortVerified,
+    ).concentrationPercent,
   };
   const opponent = evaluateRule(evidence);
   if (candidateId) updateCandidate(store, candidateId, "INPUT_READY");
@@ -185,18 +199,28 @@ export async function prepareOne(options: {
     source: intraday ? ("nansen-v2" as const) : ("nansen-v1" as const),
     provenance: {
       fetchedAt: fetched.sort().at(-1) ?? preparedAt,
-      providerVersion: "Nansen API historical endpoints / normalizer v1",
+      providerVersion: `Nansen API historical endpoints / ${DEX_NORMALIZER_VERSION} / ${DEX_SCHEMA_VERSION}`,
+      selectionPolicy: candidateId ? CORPUS_CONFIG.version : "manual-token",
       requestFingerprints: fingerprints,
       coverageWarnings: [
         ...(hasProviderWarnings(historyRaw) ? ["HISTORY_WARNING_PRESENT"] : []),
-        ...(hasProviderWarnings(flowRaw) ? ["FLOW_WARNING_PRESENT"] : []),
+        ...(hasProviderWarnings(buyRaw) || hasProviderWarnings(sellRaw)
+          ? ["DEX_WARNING_PRESENT"]
+          : []),
         ...(hasProviderWarnings(holdersRaw) ? ["HOLDERS_WARNING_PRESENT"] : []),
         ...(hasProviderWarnings(futureRaw) ? ["OUTCOME_WARNING_PRESENT"] : []),
       ],
     },
   };
   const version = `nansen-v1-${digest(
-    JSON.stringify({ requestFingerprints: fingerprints, fetchedAt: fetched }),
+    JSON.stringify({
+      schemaVersion: DEX_SCHEMA_VERSION,
+      normalizerVersion: DEX_NORMALIZER_VERSION,
+      ruleVersion: config.ruleVersion,
+      selectionPolicy: candidateId ? CORPUS_CONFIG.version : "manual-token",
+      requestFingerprints: fingerprints,
+      fetchedAt: fetched,
+    }),
   ).slice(0, 24)}`;
   const scenario = scenarioSchema.parse({ version, ...scenarioWithoutVersion });
   const existing = store.sqlite
@@ -262,6 +286,9 @@ export async function fetchUniverse(
     chains: [network],
     trader_type: "all",
     exclude_sectors: ["Stablecoin"],
+    ...(network === "solana"
+      ? { sectors_filter: ["Memecoins", "AI Meme"] }
+      : {}),
     filters: {
       volume_usd: { min: CORPUS_CONFIG.volumeUsdMin },
       liquidity_usd: { min: CORPUS_CONFIG.liquidityUsdMin },

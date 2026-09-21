@@ -20,11 +20,20 @@ export function publicRound(round: Round, scenario: Scenario) {
     assumptions: { ...scenario.assumptions },
   };
   if (round.state === "BLIND") return { ...base, state: "BLIND" as const };
-  const evidence = {
-    flowUsd: { ...scenario.evidence.flowUsd },
-    concentrationPercent: { ...scenario.evidence.concentrationPercent },
-    balanceChangeTokens: { ...scenario.evidence.balanceChangeTokens },
-  };
+  const evidence =
+    "tokenPressurePercent" in scenario.evidence
+      ? {
+          tokenPressurePercent: { ...scenario.evidence.tokenPressurePercent },
+          buyerCount: { ...scenario.evidence.buyerCount },
+          sellerCount: { ...scenario.evidence.sellerCount },
+          grossVolumeUsd: { ...scenario.evidence.grossVolumeUsd },
+          concentrationPercent: { ...scenario.evidence.concentrationPercent },
+        }
+      : {
+          flowUsd: { ...scenario.evidence.flowUsd },
+          concentrationPercent: { ...scenario.evidence.concentrationPercent },
+          balanceChangeTokens: { ...scenario.evidence.balanceChangeTokens },
+        };
   const withEvidence = { ...base, initial: round.initial, evidence };
   if (round.state === "EVIDENCE")
     return { ...withEvidence, state: "EVIDENCE" as const };
@@ -117,13 +126,24 @@ export function publicProvenance(scenario: Scenario) {
     fetchedAt: scenario.provenance?.fetchedAt ?? null,
     providerVersion: scenario.provenance?.providerVersion ?? scenario.source,
     ruleVersion: scenario.assumptions.ruleVersion,
+    selectionPolicy:
+      scenario.provenance?.selectionPolicy ?? "legacy-unspecified",
     ruleInputs: scenario.evidence,
     ruleOutput: scenario.opponent.action,
     priceReference: `${timeframe.unit === "hour" ? "Hourly" : "Daily"} opening price at exact entry and exit; no shifted or filled references.`,
     coverage: {
-      flow: scenario.evidence.flowUsd.status,
+      ...("tokenPressurePercent" in scenario.evidence
+        ? {
+            tokenPressure: scenario.evidence.tokenPressurePercent.status,
+            buyers: scenario.evidence.buyerCount.status,
+            sellers: scenario.evidence.sellerCount.status,
+            dexTurnover: scenario.evidence.grossVolumeUsd.status,
+          }
+        : {
+            flow: scenario.evidence.flowUsd.status,
+            holderBalance: scenario.evidence.balanceChangeTokens.status,
+          }),
       concentration: scenario.evidence.concentrationPercent.status,
-      holderBalance: scenario.evidence.balanceChangeTokens.status,
       outcome: executionPrices(
         scenario.future,
         scenario.entryAt,
@@ -136,9 +156,24 @@ export function publicProvenance(scenario: Scenario) {
     requestFingerprints: scenario.provenance?.requestFingerprints ?? [],
     providerWarnings: scenario.provenance?.coverageWarnings ?? [],
     notices: [
+      ...("tokenPressurePercent" in scenario.evidence
+        ? [
+            "Experimental Smart Money DEX accumulation rule; two-wallet confirmation is a heuristic, not demonstrated alpha.",
+            "The cohort includes historical Smart Trader labels with at least $10 net directional USD volume. Token accumulation and USD activity can have opposite signs. It does not represent every Smart Money wallet.",
+            scenario.identity.chain === "Solana"
+              ? "Solana corpus selection uses Nansen’s reconstructed Memecoins and AI Meme sectors with a 30-day token-age minimum. Sector tags can change after the historical date; manually prepared tokens are not sector-verified."
+              : "Ethereum corpus selection uses Nansen’s reconstructed non-stablecoin universe with volume, liquidity, and 30-day token-age guards. Historical metadata can be revised; manually prepared tokens bypass screening.",
+          ]
+        : []),
       "Cached historical reconstruction; playback is not a fresh API response.",
       "Historical reconstructions are not certified recordings of what was published at the time. A 24-hour buffer does not prove historical availability.",
-      "Holders are selected at the cutoff. Balance changes are not proof of trades or sales.",
+      ...("tokenPressurePercent" in scenario.evidence
+        ? [
+            "Top holders are selected at the cutoff. Concentration is risk context, not proof of trading activity.",
+          ]
+        : [
+            "Holders are selected at the cutoff. Balance changes are not proof of trades or sales.",
+          ]),
       "Fees of 0.1% and slippage of 0.25% apply on each side. Price references are not guaranteed executable quotes.",
       "A revision’s result is descriptive, not evidence of investment edge or a causal effect.",
     ],

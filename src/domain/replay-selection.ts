@@ -5,14 +5,14 @@ export type ReplayNetwork = z.infer<typeof replayNetworkSchema>;
 
 export const replayNetworks = [
   {
-    value: "ethereum" as const,
-    label: "Ethereum",
-    detail: "Historical price, flow, and holder replays",
-  },
-  {
     value: "solana" as const,
     label: "Solana",
-    detail: "Historical price, flow, and holder replays",
+    detail: "Memecoin Smart Money DEX replays",
+  },
+  {
+    value: "ethereum" as const,
+    label: "Ethereum",
+    detail: "Exploratory non-stablecoin Smart Money DEX replays",
   },
 ] as const;
 

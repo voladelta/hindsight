@@ -4,7 +4,7 @@ import type { Store } from "../db";
 const ORIGIN = "https://api.nansen.ai";
 export const endpoints = {
   prices: { path: "/api/v1/tgm/token-ohlcv", cost: 1 },
-  flow: { path: "/api/v1beta1/tgm/historical-token-flow-summary", cost: 5 },
+  dex: { path: "/api/v1beta1/tgm/historical-who-bought-sold", cost: 5 },
   holders: { path: "/api/v1beta1/tgm/historical-top-holders", cost: 25 },
   screener: { path: "/api/v1beta1/token-screener/historical", cost: 5 },
 } as const;

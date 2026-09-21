@@ -2,10 +2,12 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
+  DEX_RULE_VERSION,
   choiceSchema,
   roundDurationSchema,
   roundSchema,
   type Round,
+  type RoundDuration,
 } from "../domain/model";
 import {
   replayNetworks,
@@ -32,6 +34,26 @@ const creationSchema = z
   })
   .strict();
 const emptySchema = z.object({}).strict();
+
+type PreparedReplayMetadata = {
+  source?: string;
+  identity?: { chain?: string };
+  assumptions?: { ruleVersion?: string };
+};
+
+function isEligibleReplay(
+  input: PreparedReplayMetadata,
+  duration: RoundDuration,
+  chain: string,
+) {
+  const wantedSource = duration === "INTRADAY" ? "nansen-v2" : "nansen-v1";
+
+  return (
+    input.source === wantedSource &&
+    input.identity?.chain === chain &&
+    input.assumptions?.ruleVersion === DEX_RULE_VERSION
+  );
+}
 
 export function createApi(store: Store, origin: string) {
   const { db, sqlite } = store;
@@ -82,25 +104,16 @@ export function createApi(store: Store, origin: string) {
           .from(inputs)
           .all()
           .map((row) => {
-            const payload = JSON.parse(row.payload) as {
-              identity?: { chain?: string };
-              source?: string;
-            };
+            const payload = JSON.parse(row.payload) as PreparedReplayMetadata;
             return payload;
           });
-        const wantedSources = new Set(["nansen-v1", "nansen-v2"]);
         const networks = replayNetworks.map((network) => {
-          const networkInputs = preparedInputs.filter(
-            (input) =>
-              wantedSources.has(input.source ?? "") &&
-              input.identity?.chain === network.label,
-          );
           const preparedCounts = {
-            intraday: networkInputs.filter(
-              (input) => input.source === "nansen-v2",
+            intraday: preparedInputs.filter((input) =>
+              isEligibleReplay(input, "INTRADAY", network.label),
             ).length,
-            sevenDays: networkInputs.filter(
-              (input) => input.source === "nansen-v1",
+            sevenDays: preparedInputs.filter((input) =>
+              isEligibleReplay(input, "SEVEN_DAYS", network.label),
             ).length,
           };
           const preparedCount =
@@ -215,21 +228,12 @@ export function createApi(store: Store, origin: string) {
               .orderBy(inputs.ordinal)
               .all();
             const eligible = allInputs.filter((row) => {
-              const parsed = JSON.parse(row.payload) as {
-                source?: string;
-                identity?: { chain?: string };
-              };
-              const source = parsed.source;
-              const duration = selection.duration;
-              const wantedSource =
-                duration === "INTRADAY" ? "nansen-v2" : "nansen-v1";
-              return (
-                source === wantedSource &&
-                parsed.identity?.chain ===
-                  replayNetworks.find(
-                    (network) => network.value === selection.chain,
-                  )!.label
-              );
+              const parsed = JSON.parse(row.payload) as PreparedReplayMetadata;
+              const chain = replayNetworks.find(
+                (network) => network.value === selection.chain,
+              )!.label;
+
+              return isEligibleReplay(parsed, selection.duration, chain);
             });
             if (!eligible.length)
               throw new HttpError(

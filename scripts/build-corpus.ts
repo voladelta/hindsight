@@ -70,7 +70,7 @@ async function main() {
   const runId =
     asString(options["run-id"]) ??
     deterministicRunId(asOf, seed, count, durationOption, network.data, skip);
-  const estimate = 5 + count * 32;
+  const estimate = 5 + count * 37;
 
   if (options["dry-run"] === true) {
     loadEnvironmentFiles();
@@ -95,6 +95,16 @@ async function main() {
   options["run-id"] = runId;
   const context = providerContext(options, estimate);
   try {
+    const incompatible = context.store.sqlite
+      .query(
+        "SELECT COUNT(*) AS count FROM scenario_candidates WHERE run_id = ? AND config_version != ?",
+      )
+      .get(runId, CORPUS_CONFIG.version) as { count: number };
+    if (incompatible.count > 0)
+      throw new Error(
+        "This run uses an older selection policy. Use a new run ID for the current corpus; existing rounds remain readable.",
+      );
+
     const existing = context.store.sqlite
       .query(
         "SELECT COUNT(*) AS count FROM scenario_candidates WHERE run_id = ?",

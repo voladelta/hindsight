@@ -56,7 +56,7 @@ export function App() {
   const [actionError, setActionError] = useState("");
   const [pendingChoice, setPendingChoice] = useState<Choice | null>(null);
   const [roundDuration, setRoundDuration] = useState<RoundDuration>("INTRADAY");
-  const [replayNetwork, setReplayNetwork] = useState<ReplayNetwork>("ethereum");
+  const [replayNetwork, setReplayNetwork] = useState<ReplayNetwork>("solana");
   const selectedNetwork = replayNetworks.find(
     (option) => option.value === replayNetwork,
   );
@@ -65,6 +65,21 @@ export function App() {
       ? selectedNetwork.preparedCounts.intraday
       : selectedNetwork.preparedCounts.sevenDays
     : 0;
+
+  const selectRoundDuration = (duration: RoundDuration) => {
+    setRoundDuration(duration);
+    const countKey = duration === "INTRADAY" ? "intraday" : "sevenDays";
+
+    if ((selectedNetwork?.preparedCounts[countKey] ?? 0) > 0) return;
+
+    const firstAvailable = replayNetworks.find(
+      (option) =>
+        option.value !== "robinhood" && option.preparedCounts[countKey] > 0,
+    );
+    if (firstAvailable && firstAvailable.value !== "robinhood") {
+      setReplayNetwork(firstAvailable.value);
+    }
+  };
 
   // Sync with browser URL changes
   useEffect(() => {
@@ -88,11 +103,14 @@ export function App() {
         if (!res.ok) throw new Error("Could not initialize session.");
         const data = await res.json();
         setReplayNetworks(data.replayNetworks ?? []);
-        const firstAvailable = (
+        const firstIntraday = (
           data.replayNetworks as ReplayNetworkOption[]
-        )?.find((option) => option.available && option.value !== "robinhood");
-        if (firstAvailable && firstAvailable.value !== "robinhood") {
-          setReplayNetwork(firstAvailable.value);
+        )?.find(
+          (option) =>
+            option.preparedCounts.intraday > 0 && option.value !== "robinhood",
+        );
+        if (firstIntraday && firstIntraday.value !== "robinhood") {
+          setReplayNetwork(firstIntraday.value);
         }
         setSessionReady(true);
       } catch {
@@ -400,12 +418,12 @@ export function App() {
                   02 · ONCHAIN EVIDENCE
                 </div>
                 <h2 className="font-semibold text-foreground">
-                  3 Historical Evidence Cards
+                  Historical DEX Evidence
                 </h2>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Unlock Smart Trader net flow, top 10 supply concentration, and
-                  holders’ 7-day balance changes. Keep your call or change your
-                  mind, then lock your final decision.
+                  Unlock Smart Money token pressure, buyer and seller breadth,
+                  DEX turnover, and top 10 supply concentration. Keep your call
+                  or change your mind, then lock your final decision.
                 </p>
               </div>
 
@@ -436,11 +454,16 @@ export function App() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
                 {replayNetworks.map((option) => {
                   const selected = replayNetwork === option.value;
+                  const durationCount =
+                    roundDuration === "INTRADAY"
+                      ? option.preparedCounts.intraday
+                      : option.preparedCounts.sevenDays;
+                  const availableForDuration = durationCount > 0;
                   return (
                     <label
                       key={option.value}
                       className={`min-h-24 rounded-xl border p-4 transition-colors duration-150 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background ${
-                        option.available
+                        availableForDuration
                           ? "cursor-pointer"
                           : "cursor-not-allowed opacity-60"
                       } ${
@@ -455,7 +478,7 @@ export function App() {
                         name="replay-network"
                         value={option.value}
                         checked={selected}
-                        disabled={!option.available}
+                        disabled={!availableForDuration}
                         onChange={() => {
                           if (option.value !== "robinhood") {
                             setReplayNetwork(option.value);
@@ -467,15 +490,15 @@ export function App() {
                           {option.label}
                         </span>
                         <span className="text-[11px] font-mono text-muted-foreground">
-                          {option.available
-                            ? `${option.preparedCount} replays ready`
+                          {availableForDuration
+                            ? `${durationCount} replays ready`
                             : "Unavailable"}
                         </span>
                       </span>
                       <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
-                        {option.available
+                        {availableForDuration
                           ? option.detail
-                          : option.unavailableReason}
+                          : `No ${roundDuration === "INTRADAY" ? "intraday" : "swing"} DEX replays prepared`}
                       </span>
                     </label>
                   );
@@ -502,41 +525,54 @@ export function App() {
                       detail: "Daily closing prices · reveal the next 7 days",
                     },
                   ] as const
-                ).map((option) => (
-                  <label
-                    key={option.value}
-                    className={`min-h-20 cursor-pointer rounded-xl border p-4 transition-colors duration-150 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background ${
-                      roundDuration === option.value
-                        ? "border-primary bg-primary/10"
-                        : "border-border bg-card"
-                    }`}
-                  >
-                    <input
-                      className="sr-only"
-                      type="radio"
-                      name="round-duration"
-                      value={option.value}
-                      checked={roundDuration === option.value}
-                      onChange={() => setRoundDuration(option.value)}
-                    />
-                    <span className="flex items-center justify-between gap-3">
-                      <span className="font-semibold text-foreground">
-                        {option.title}
-                      </span>
-                      <span
-                        aria-hidden="true"
-                        className={`size-4 rounded-full border-2 ${
-                          roundDuration === option.value
-                            ? "border-primary bg-primary shadow-[inset_0_0_0_3px_var(--color-background)]"
-                            : "border-muted-foreground"
-                        }`}
+                ).map((option) => {
+                  const countKey =
+                    option.value === "INTRADAY" ? "intraday" : "sevenDays";
+                  const available = replayNetworks.some(
+                    (network) => network.preparedCounts[countKey] > 0,
+                  );
+
+                  return (
+                    <label
+                      key={option.value}
+                      className={`min-h-20 rounded-xl border p-4 transition-colors duration-150 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background ${
+                        available
+                          ? "cursor-pointer"
+                          : "cursor-not-allowed opacity-60"
+                      } ${
+                        roundDuration === option.value
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-card"
+                      }`}
+                    >
+                      <input
+                        className="sr-only"
+                        type="radio"
+                        name="round-duration"
+                        value={option.value}
+                        checked={roundDuration === option.value}
+                        disabled={!available}
+                        onChange={() => selectRoundDuration(option.value)}
                       />
-                    </span>
-                    <span className="mt-1 block text-xs text-muted-foreground">
-                      {option.detail}
-                    </span>
-                  </label>
-                ))}
+                      <span className="flex items-center justify-between gap-3">
+                        <span className="font-semibold text-foreground">
+                          {option.title}
+                        </span>
+                        <span
+                          aria-hidden="true"
+                          className={`size-4 rounded-full border-2 ${
+                            roundDuration === option.value
+                              ? "border-primary bg-primary shadow-[inset_0_0_0_3px_var(--color-background)]"
+                              : "border-muted-foreground"
+                          }`}
+                        />
+                      </span>
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        {available ? option.detail : "No prepared DEX replays"}
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
             </fieldset>
 
@@ -787,7 +823,7 @@ export function App() {
                       <p className="text-xs text-muted-foreground">
                         Rule:{" "}
                         <code className="font-mono text-foreground">
-                          smart-flow-holder-balance-v1
+                          {currentRound.assumptions.ruleVersion}
                         </code>{" "}
                         · Deterministic evaluation using historical evidence
                         only. Not an AI predicting prices.

@@ -1,7 +1,16 @@
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { scenarioSchema } from "../../src/domain/model";
+import { evaluateRule } from "../../src/domain/engine";
 import { createApi } from "../../src/server/api";
-import { openStore, type Store } from "../../src/server/db";
-import { seedFixtureScenarios } from "../fixtures/scenario";
+import {
+  inputs,
+  openStore,
+  outcomes,
+  rounds,
+  type Store,
+} from "../../src/server/db";
+import { fixtureScenario, seedFixtureScenarios } from "../fixtures/scenario";
 
 const origin = "http://hindsight.test";
 process.env.DEPLOYMENT_MODE = "local";
@@ -96,6 +105,83 @@ describe("round API state and privacy", () => {
     );
     expect(body.replayNetworks).toHaveLength(2);
     expect(JSON.stringify(body)).not.toMatch(/Test Fern|TST1|token_address/);
+  });
+
+  it("excludes legacy-rule fixtures from new round counts and selection", async () => {
+    const modern = fixtureScenario(0, "INTRADAY", "solana");
+    const legacyEvidence = {
+      flowUsd: { status: "available" as const, value: 25000 },
+      concentrationPercent: { status: "available" as const, value: 40 },
+      balanceChangeTokens: { status: "available" as const, value: 5000 },
+    };
+    const legacy = scenarioSchema.parse({
+      ...modern,
+      version: "test-legacy-intraday-solana",
+      identity: {
+        name: "Legacy Signal",
+        symbol: "OLD",
+        chain: "Solana",
+      },
+      evidence: legacyEvidence,
+      opponent: evaluateRule(legacyEvidence),
+      assumptions: {
+        ...modern.assumptions,
+        ruleVersion: "smart-flow-holder-balance-v1",
+      },
+    });
+    const { future, ...input } = legacy;
+    store.db
+      .insert(inputs)
+      .values({
+        version: legacy.version,
+        payload: JSON.stringify(input),
+        ordinal: -1,
+      })
+      .run();
+    store.db
+      .insert(outcomes)
+      .values({ version: legacy.version, payload: JSON.stringify(future) })
+      .run();
+
+    const sessionResponse = await request("/api/session");
+    const sessionBody = (await sessionResponse.json()) as {
+      replayNetworks: Array<{
+        value: string;
+        preparedCounts: { intraday: number };
+      }>;
+    };
+    expect(
+      sessionBody.replayNetworks.find((network) => network.value === "solana")
+        ?.preparedCounts.intraday,
+    ).toBe(6);
+
+    const cookie = sessionResponse.headers.get("set-cookie")?.split(";", 1)[0];
+    if (!cookie) throw new Error("Session cookie was not created");
+    const created = await createRound(cookie, crypto.randomUUID(), "solana");
+    const storedRound = store.sqlite
+      .query("SELECT version FROM rounds WHERE id = ?")
+      .get(created.body.id) as { version: string };
+
+    expect(created.response.status).toBe(200);
+    expect(storedRound.version).not.toBe(legacy.version);
+
+    const legacyRoundId = crypto.randomUUID();
+    const token = cookie.split("=", 2)[1]!;
+    store.db
+      .insert(rounds)
+      .values({
+        id: legacyRoundId,
+        owner: createHash("sha256").update(token).digest("hex"),
+        version: legacy.version,
+        payload: JSON.stringify({ id: legacyRoundId, state: "BLIND" }),
+      })
+      .run();
+
+    const restoredLegacy = await request(`/api/rounds/${legacyRoundId}`, {
+      cookie,
+    });
+    expect(restoredLegacy.status).toBe(200);
+    expect((await restoredLegacy.json()).state).toBe("BLIND");
   });
 
   it("reports an unavailable pool instead of inventing a fallback replay", async () => {

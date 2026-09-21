@@ -27,7 +27,7 @@ async function main() {
   if (durationOption !== "intraday" && durationOption !== "7d")
     throw new Error("--duration must be intraday or 7d.");
 
-  const context = providerContext(options, 32);
+  const context = providerContext(options, 37);
   try {
     const scenario = await prepareOne({
       client: context.client,

@@ -31,7 +31,7 @@ For production, run `bun run build` followed by `bun run start`. Run one Bun ser
 
 ## How it works
 
-1. Choose an Ethereum or Solana token pool and a replay duration: 30 days of hourly history with a 24-hour outcome, or 30 daily candles with a seven-day outcome.
+1. Choose a Solana memecoin or exploratory Ethereum token pool and a prepared replay duration: 30 days of hourly history with a 24-hour outcome, or 30 daily candles with a seven-day outcome.
 2. Read the masked chart and record your first choice.
 3. Inspect the evidence, then lock your final choice to see the opponent's decision.
 4. Reveal the asset and outcome, compare results, and inspect the evidence provenance.
@@ -65,7 +65,13 @@ Read [AGENTS.md](AGENTS.md) before contributing. Keep changes focused, preserve 
 
 ## Customize your own replay
 
-The included replay is deliberately small: it combines price history with Smart Trader net flow, top-holder concentration, and selected holders' balance changes. Treat it as a worked example, not a complete trading model. A useful customization starts with one question—such as whether exchange flows, whale activity, wallet behavior, or another historical signal would have changed your decision—and adds only the data needed to explore it.
+The included replay focuses on established onchain tokens. Solana screening selects Nansen's reconstructed `Memecoins` and `AI Meme` sectors; Ethereum screening uses the broader non-stablecoin universe. Both require at least $250,000 volume, $100,000 liquidity, and 30 days of token age. Selection is deterministic and does not depend on the proposed signal or future outcomes. Sector tags may be revised; they do not prove contemporaneous classification. Explicit `data:prepare-one` token requests bypass sector screening.
+
+The experimental `smart-dex-accumulation-v1` opponent uses seven days of historical DEX activity ending at the cutoff, with the existing assumed 24-hour availability delay. [Historical Who Bought/Sold](https://docs.nansen.ai/api/backtesting-data/historical-token-who-bought-sold) supplies separate BUY and SELL pages for the four Smart Trader label classes and their four legacy Smart Dex Trader equivalents. Each request uses a $10 minimum **net directional USD volume** and at most 1,000 wallets. The union is therefore a filtered cohort, not all Smart Money activity. No CEX or exchange-flow metric is requested or used.
+
+Token pressure is `(tokens bought − tokens sold) / (tokens bought + tokens sold)`, displayed as a percentage. Breadth counts token-net buyers and sellers across complete wallet records from both pages. BUY requires positive pressure, at least two net buyers, and more buyers than sellers; SELL requires the exact inverse. Otherwise the rule abstains. Gross USD DEX turnover provides activity context, and top-10 holder concentration provides separate risk context; neither votes. USD and token direction can differ when trade prices change. Missing or malformed records, conflicting duplicates, incomplete pagination, and zero token volume make the signal unavailable. The two-wallet threshold is a heuristic; predictive alpha remains unproven until chronological evaluation against fixed baselines.
+
+New scenario identities include the evidence schema, normalizer, and rule versions. The picker only starts scenarios using the current `smart-dex-accumulation-v1` rule, and its counts are scoped to the selected duration. Previously stored rounds retain the legacy flow-and-holder rule and evidence and remain readable by their existing round URLs, but they are not mixed into new rounds. Treat this implementation as a research example, not a complete trading model. It supports established-token swing research, not fresh-launch scalping.
 
 To add or replace a metric:
 
@@ -86,16 +92,18 @@ To prepare historical replays—or refresh an older prepared set with more recen
 
 ```dotenv
 NANSEN_API_KEY=your_nansen_api_key
-NANSEN_MAX_CREDITS=37
+NANSEN_MAX_CREDITS=42
 ```
 
 Then prepare a small corpus. Replace the as-of placeholder with a UTC date whose full outcome window has already elapsed; for the default intraday replay, use a date at least three days in the past.
 
 ```bash
-bun run data:build -- --max-credits 37 --as-of YYYY-MM-DD --count 1 --chain ethereum
+bun run data:build -- --max-credits 42 --as-of YYYY-MM-DD --count 1 --chain ethereum
 ```
 
 Restart the app after preparation. Provider preparation is explicit and may consume Nansen credits. The `data:prepare-one`, `data:build`, and `smoke:nansen` commands require both local and command credit caps; ordinary startup, builds, and tests do not call the provider. Run `bun run usage:report` to inspect local request accounting. Credit estimates are not guaranteed billing caps.
+
+Fresh-call planning costs are 42 credits for the first screened scenario: screener 5, two price calls 2, two DEX pages 10, and historical holders 25. Each additional scenario sharing that screener costs 37 credits; explicit `data:prepare-one` also costs 37 before retries. No extra DEX pages are fetched. Cache hits can reduce cost; retries and uncertain requests retain additional reservations and can exhaust the local cap. These estimates are not retry-inclusive billing ceilings.
 
 Prepared scenarios are private by default. Do not publish Nansen data, derived displays, demos, or screenshots unless written permission covers that exact use. The MIT license covers this repository's code; it does not grant rights to third-party data.
 

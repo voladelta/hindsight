@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   HOUR,
   evaluateRule,
+  dexEvidence,
   holderEvidence,
   measurement,
   simulate,
@@ -100,6 +101,54 @@ describe("evidence and fixed rule", () => {
         balanceChangeTokens: measurement(0),
       }).action,
     ).toBe("CASH");
+  });
+});
+
+describe("Smart Money token accumulation rule", () => {
+  const buyer = { boughtTokens: 100, soldTokens: 20, grossUsd: 500 };
+  const seller = { boughtTokens: 20, soldTokens: 100, grossUsd: 500 };
+  const rule = (wallets: Parameters<typeof dexEvidence>[0]) =>
+    evaluateRule({
+      ...dexEvidence(wallets),
+      concentrationPercent: measurement(null),
+    });
+
+  it("calculates token pressure from both columns and keeps concentration outside the vote", () => {
+    const wallets = [buyer, buyer, seller];
+    const before = structuredClone(wallets);
+    const evidence = dexEvidence(wallets);
+
+    expect(evidence.tokenPressurePercent).toEqual({
+      status: "available",
+      value: (100 * 80) / 360,
+    });
+    expect(evidence.buyerCount).toEqual(measurement(2));
+    expect(evidence.sellerCount).toEqual(measurement(1));
+    expect(evidence.grossVolumeUsd).toEqual(measurement(1500));
+    expect(rule(wallets).action).toBe("BUY");
+    expect(rule([seller, seller, buyer]).action).toBe("CASH");
+    expect(wallets).toEqual(before);
+  });
+
+  it("abstains on disagreement, ties, one-wallet conviction, and zero or unavailable volume", () => {
+    expect(rule([buyer]).action).toBe("ABSTAIN");
+    expect(rule([buyer, seller]).action).toBe("ABSTAIN");
+    expect(rule([buyer, buyer, { ...seller, soldTokens: 1000 }]).action).toBe(
+      "ABSTAIN",
+    );
+    expect(
+      rule([seller, seller, { ...buyer, boughtTokens: 1000 }]).action,
+    ).toBe("ABSTAIN");
+    expect(rule([]).action).toBe("ABSTAIN");
+    expect(rule(null).action).toBe("ABSTAIN");
+    expect(dexEvidence([]).tokenPressurePercent).toEqual({
+      status: "unavailable",
+      reason: "ZERO_DEX_VOLUME",
+    });
+    expect(
+      dexEvidence([{ boughtTokens: 0, soldTokens: 0, grossUsd: 0 }])
+        .tokenPressurePercent.status,
+    ).toBe("unavailable");
   });
 });
 

@@ -142,6 +142,44 @@ export function holderEvidence(holders: Holder[], sortVerified: boolean) {
 }
 
 export function evaluateRule(evidence: Evidence): Opponent {
+  if ("tokenPressurePercent" in evidence) {
+    const { tokenPressurePercent, buyerCount, sellerCount } = evidence;
+    if (
+      tokenPressurePercent.status === "available" &&
+      buyerCount.status === "available" &&
+      sellerCount.status === "available"
+    ) {
+      if (
+        buyerCount.value >= 2 &&
+        buyerCount.value > sellerCount.value &&
+        tokenPressurePercent.value > 0
+      ) {
+        return {
+          action: "BUY",
+          explanation:
+            "At least two Smart Money wallets accumulated tokens, net buyers outnumbered net sellers, and token accumulation pressure was positive.",
+        };
+      }
+      if (
+        sellerCount.value >= 2 &&
+        sellerCount.value > buyerCount.value &&
+        tokenPressurePercent.value < 0
+      ) {
+        return {
+          action: "CASH",
+          explanation:
+            "At least two Smart Money wallets distributed tokens, net sellers outnumbered net buyers, and token accumulation pressure was negative. The rule chooses SELL.",
+        };
+      }
+    }
+    return {
+      action: "ABSTAIN",
+      explanation:
+        "Token pressure and wallet breadth do not agree, fewer than two wallets support a direction, or complete DEX evidence is unavailable.",
+    };
+  }
+
+  // Stored legacy rounds retain their original evidence and fixed rule.
   const { flowUsd, balanceChangeTokens } = evidence;
   if (
     flowUsd.status === "unavailable" ||
@@ -164,6 +202,55 @@ export function evaluateRule(evidence: Evidence): Opponent {
     action: "CASH",
     explanation:
       "Smart Trader net flow is nonpositive or selected holders’ net balance change is negative.",
+  };
+}
+
+export type DexWallet = {
+  boughtTokens: number;
+  soldTokens: number;
+  grossUsd: number;
+};
+
+export function dexEvidence(
+  wallets: DexWallet[] | null,
+  reason: "INCOMPLETE_DEX" | "INVALID_DEX" = "INVALID_DEX",
+) {
+  const unavailable = (
+    failure: "INCOMPLETE_DEX" | "INVALID_DEX" | "ZERO_DEX_VOLUME",
+  ) => {
+    const item: Measurement = { status: "unavailable", reason: failure };
+    return {
+      tokenPressurePercent: item,
+      buyerCount: item,
+      sellerCount: item,
+      grossVolumeUsd: item,
+    };
+  };
+  if (wallets === null) return unavailable(reason);
+
+  let bought = new Decimal(0);
+  let sold = new Decimal(0);
+  let grossUsd = new Decimal(0);
+  let buyers = 0;
+  let sellers = 0;
+  for (const wallet of wallets) {
+    bought = bought.plus(wallet.boughtTokens);
+    sold = sold.plus(wallet.soldTokens);
+    grossUsd = grossUsd.plus(wallet.grossUsd);
+    if (wallet.boughtTokens > wallet.soldTokens) buyers += 1;
+    if (wallet.soldTokens > wallet.boughtTokens) sellers += 1;
+  }
+  const denominator = bought.plus(sold);
+  if (denominator.isZero()) return unavailable("ZERO_DEX_VOLUME");
+  const pressure = bought.minus(sold).div(denominator).mul(100).toNumber();
+  if (!Number.isFinite(pressure) || !Number.isFinite(grossUsd.toNumber()))
+    return unavailable("INVALID_DEX");
+
+  return {
+    tokenPressurePercent: measurement(pressure),
+    buyerCount: measurement(buyers),
+    sellerCount: measurement(sellers),
+    grossVolumeUsd: measurement(grossUsd.toNumber()),
   };
 }
 

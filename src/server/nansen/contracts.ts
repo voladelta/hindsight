@@ -1,6 +1,114 @@
 import { z } from "zod";
+import Decimal from "decimal.js";
 import type { Candle } from "../../domain/model";
-import { DAY, type Holder } from "../../domain/engine";
+import { DAY, type Holder, type DexWallet } from "../../domain/engine";
+import type { ReplayNetwork } from "../../domain/replay-selection";
+
+export const DEX_NORMALIZER_VERSION = "smart-dex-normalizer-v1";
+export const SMART_TRADER_LABELS = [
+  "30D Smart Trader",
+  "90D Smart Trader",
+  "180D Smart Trader",
+  "Smart Trader",
+  "30D Smart Dex Trader",
+  "90D Smart Dex Trader",
+  "180D Smart Dex Trader",
+  "Smart Dex Trader",
+];
+
+const dexRow = z.object({
+  address: z.string().min(1),
+  is_smart_money: z.literal(true),
+  bought_token_volume: z.number().finite().nonnegative(),
+  sold_token_volume: z.number().finite().nonnegative(),
+  gross_token_volume: z.number().finite().nonnegative(),
+  bought_volume_usd: z.number().finite().nonnegative(),
+  sold_volume_usd: z.number().finite().nonnegative(),
+  gross_volume_usd: z.number().finite().nonnegative(),
+});
+const dexResponse = z.object({
+  data: z.array(dexRow).max(1000),
+  pagination: z.object({ is_last_page: z.boolean() }),
+  truncated: z.boolean().optional(),
+  warnings: z.array(z.unknown()).nullish(),
+});
+
+export function normalizeDex(
+  buyRaw: unknown,
+  sellRaw: unknown,
+  network: ReplayNetwork,
+): { wallets: DexWallet[] | null; reason?: "INCOMPLETE_DEX" | "INVALID_DEX" } {
+  const buy = dexResponse.safeParse(buyRaw);
+  const sell = dexResponse.safeParse(sellRaw);
+  if (!buy.success || !sell.success)
+    return { wallets: null, reason: "INVALID_DEX" };
+  const sides = [buy.data, sell.data];
+  if (
+    sides.some(
+      (side) =>
+        !side.pagination.is_last_page ||
+        side.truncated ||
+        side.warnings?.length,
+    )
+  )
+    return { wallets: null, reason: "INCOMPLETE_DEX" };
+
+  const unique = new Map<
+    string,
+    { row: z.infer<typeof dexRow>; side: number }
+  >();
+  for (const [side, response] of sides.entries()) {
+    for (const row of response.data) {
+      const validAddress =
+        network === "solana"
+          ? /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(row.address)
+          : /^0x[a-fA-F0-9]{40}$/.test(row.address);
+      const address =
+        network === "solana" ? row.address : row.address.toLowerCase();
+      const directionUsd = new Decimal(
+        side === 0 ? row.bought_volume_usd : row.sold_volume_usd,
+      ).minus(side === 0 ? row.sold_volume_usd : row.bought_volume_usd);
+      const matchesGross = (bought: number, sold: number, gross: number) =>
+        new Decimal(bought)
+          .plus(sold)
+          .minus(gross)
+          .abs()
+          .lte(new Decimal(gross).mul(1e-9));
+      if (
+        !validAddress ||
+        directionUsd.lt(10) ||
+        !matchesGross(
+          row.bought_token_volume,
+          row.sold_token_volume,
+          row.gross_token_volume,
+        ) ||
+        !matchesGross(
+          row.bought_volume_usd,
+          row.sold_volume_usd,
+          row.gross_volume_usd,
+        )
+      )
+        return { wallets: null, reason: "INVALID_DEX" };
+
+      const canonical = { ...row, address };
+      const previous = unique.get(address);
+      if (
+        previous &&
+        (previous.side !== side ||
+          JSON.stringify(previous.row) !== JSON.stringify(canonical))
+      )
+        return { wallets: null, reason: "INVALID_DEX" };
+      unique.set(address, { row: canonical, side });
+    }
+  }
+  return {
+    wallets: [...unique.values()].map(({ row }) => ({
+      boughtTokens: row.bought_token_volume,
+      soldTokens: row.sold_token_volume,
+      grossUsd: row.gross_volume_usd,
+    })),
+  };
+}
 
 const nullableFinite = z.number().finite().nullable().optional();
 const envelope = <T extends z.ZodType>(item: T) =>
@@ -26,10 +134,6 @@ const priceRow = z
   })
   .passthrough();
 
-const flowRow = z
-  .object({ smart_trader_net_flow_usd: nullableFinite })
-  .passthrough();
-
 const holderRow = z
   .object({
     address: z.string().min(1),
@@ -51,7 +155,6 @@ const screenerRow = z
 
 export const nansenSchemas = {
   prices: envelope(priceRow),
-  flow: envelope(flowRow),
   holders: envelope(holderRow).extend({
     pagination: z
       .object({ is_last_page: z.boolean().optional() })
@@ -112,13 +215,6 @@ export function normalizePrices(raw: unknown, candleMilliseconds = DAY) {
       symbol: first?.token_symbol,
     },
   };
-}
-
-export function normalizeFlow(raw: unknown) {
-  const parsed = nansenSchemas.flow.parse(raw);
-  if (parsed.data.length === 0) return null;
-  if (parsed.data.length !== 1) throw new Error("NANSEN_AMBIGUOUS_FLOW");
-  return parsed.data[0]!.smart_trader_net_flow_usd ?? null;
 }
 
 export function normalizeHolders(raw: unknown): {

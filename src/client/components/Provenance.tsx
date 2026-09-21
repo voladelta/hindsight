@@ -64,8 +64,10 @@ export function Provenance({ id }: { id: string }) {
               <dd>{data.fetchedAt ?? "None — invented fixture"}</dd>
               <dt>Rule</dt>
               <dd>{data.ruleVersion}</dd>
+              <dt>Selection policy</dt>
+              <dd>{data.selectionPolicy}</dd>
               <dt>Rule output</dt>
-              <dd>{data.ruleOutput}</dd>
+              <dd>{data.ruleOutput === "CASH" ? "SELL" : data.ruleOutput}</dd>
               <dt>Coverage</dt>
               <dd>
                 {Object.entries(data.coverage).map(([key, val]) => (

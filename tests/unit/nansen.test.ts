@@ -1,11 +1,16 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { openStore, type Store } from "../../src/server/db";
+import { createHash } from "node:crypto";
+import { openStore, inputs, outcomes, type Store } from "../../src/server/db";
+import { publicRound } from "../../src/domain/dto";
+import { measurement } from "../../src/domain/engine";
 import {
   createNansenClient,
   NansenError,
 } from "../../src/server/nansen/client";
 import {
   normalizeHolders,
+  normalizeDex,
+  SMART_TRADER_LABELS,
   normalizePrices,
   type UniverseCandidate,
 } from "../../src/server/nansen/contracts";
@@ -42,18 +47,34 @@ function client(
 
 describe("Nansen transport controls", () => {
   it("queries the requested historical screener network", async () => {
-    let requestBody: unknown;
+    const requestBodies: unknown[] = [];
     const nansen = client(async (_input, init) => {
-      requestBody = JSON.parse(String(init?.body));
+      requestBodies.push(JSON.parse(String(init?.body)));
       return new Response(JSON.stringify({ data: [] }), {
         status: 200,
         headers: { "x-nansen-credits-used": "5" },
       });
-    }, 5);
+    }, 10);
 
     await fetchUniverse(nansen, "2026-08-01", "solana");
+    await fetchUniverse(nansen, "2026-08-01", "ethereum");
 
-    expect(requestBody).toMatchObject({ chains: ["solana"] });
+    expect(requestBodies[0]).toMatchObject({
+      chains: ["solana"],
+      sectors_filter: ["Memecoins", "AI Meme"],
+      trader_type: "all",
+      filters: {
+        volume_usd: { min: 250000 },
+        liquidity_usd: { min: 100000 },
+        token_age_days: { min: 30 },
+      },
+    });
+    expect(requestBodies[1]).toMatchObject({
+      chains: ["ethereum"],
+      trader_type: "all",
+      exclude_sectors: ["Stablecoin"],
+    });
+    expect(requestBodies[1]).not.toHaveProperty("sectors_filter");
   });
 
   it("serves an identical request from private cache without another upstream call", async () => {
@@ -288,7 +309,7 @@ describe("Nansen boundary normalization and selection", () => {
       apiKey: "test-key",
       credentialNamespace: "test-prepare",
       runId: "prepare-test",
-      maxCredits: 32,
+      maxCredits: 37,
       maxRetries: 0,
       minIntervalMs: 0,
       fetch: async (input, init) => {
@@ -296,12 +317,36 @@ describe("Nansen boundary normalization and selection", () => {
         const requestBody = JSON.parse(String(init?.body)) as {
           chain: string;
           date?: { from: string };
+          buy_or_sell?: string;
         };
         requestedChains.push(requestBody.chain);
-        if (url.includes("historical-token-flow-summary"))
+        if (url.includes("historical-who-bought-sold")) {
+          expect(requestBody).toMatchObject({
+            date_range: {
+              from: "2026-07-26T00:00:00.000Z",
+              to: "2026-08-01T23:59:59.999Z",
+            },
+            filters: {
+              include_labels: SMART_TRADER_LABELS,
+              trade_volume_usd: { min: 10 },
+            },
+            pagination: { page: 1, per_page: 1000 },
+            order_by: [{ field: "gross_volume_usd", direction: "DESC" }],
+          });
+          expect(requestBody).not.toHaveProperty("apply_blacklist_filter");
           return new Response(
-            JSON.stringify({ data: [{ smart_trader_net_flow_usd: 10 }] }),
+            JSON.stringify(
+              dexPage(
+                requestBody.buy_or_sell === "BUY"
+                  ? [
+                      dexRow("So11111111111111111111111111111111111111112"),
+                      dexRow("So11111111111111111111111111111111111111113"),
+                    ]
+                  : [],
+              ),
+            ),
           );
+        }
         if (url.includes("historical-top-holders"))
           return new Response(
             JSON.stringify({
@@ -334,7 +379,13 @@ describe("Nansen boundary normalization and selection", () => {
 
     expect(scenario.source).toBe("nansen-v2");
     expect(scenario.identity.chain).toBe("Solana");
-    expect(requestedChains).toEqual(["solana", "solana", "solana", "solana"]);
+    expect(requestedChains).toEqual([
+      "solana",
+      "solana",
+      "solana",
+      "solana",
+      "solana",
+    ]);
     expect(scenario.evidence.concentrationPercent).toEqual({
       status: "available",
       value: 20,
@@ -345,5 +396,188 @@ describe("Nansen boundary normalization and selection", () => {
     ]);
     expect(JSON.stringify(scenario)).not.toContain("invented warning text");
     expect(store.scenario(scenario.version)).toEqual(scenario);
+
+    for (const state of ["BLIND", "EVIDENCE", "LOCKED", "REVEALED"] as const) {
+      const serialized = JSON.stringify(
+        publicRound(
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            state,
+            initial: "BUY",
+            final: "CASH",
+          },
+          scenario,
+        ),
+      );
+      expect(serialized).not.toMatch(
+        /So1111111111111111111111111111111111111111[23]|invented warning text|bought_token_volume|is_smart_money|address/,
+      );
+      if (state === "BLIND")
+        expect(serialized).not.toMatch(
+          /tokenPressurePercent|buyerCount|sellerCount|grossVolumeUsd/,
+        );
+    }
+
+    const fetchedAt = (
+      store.sqlite
+        .query("SELECT fetched_at FROM provider_cache ORDER BY rowid")
+        .all() as { fetched_at: string }[]
+    )
+      .map((row) => row.fetched_at)
+      .sort();
+    const legacyVersion = `nansen-v1-${createHash("sha256")
+      .update(
+        JSON.stringify({
+          requestFingerprints: scenario.provenance!.requestFingerprints,
+          fetchedAt,
+        }),
+      )
+      .digest("hex")
+      .slice(0, 24)}`;
+    expect(scenario.version).not.toBe(legacyVersion);
+    const { future, ...legacyInput } = {
+      ...scenario,
+      version: legacyVersion,
+      assumptions: {
+        ...scenario.assumptions,
+        ruleVersion: "smart-flow-holder-balance-v1",
+      },
+      evidence: {
+        flowUsd: measurement(123),
+        balanceChangeTokens: measurement(40),
+        concentrationPercent: measurement(20),
+      },
+    };
+    store.db
+      .insert(inputs)
+      .values({
+        version: legacyVersion,
+        payload: JSON.stringify(legacyInput),
+        ordinal: 1,
+      })
+      .run();
+    store.db
+      .insert(outcomes)
+      .values({ version: legacyVersion, payload: JSON.stringify(future) })
+      .run();
+
+    const repeated = await prepareOne({
+      client: nansen,
+      store,
+      tokenAddress: "So11111111111111111111111111111111111111112",
+      asOf: "2026-08-01",
+      network: "solana",
+    });
+    expect(repeated).toEqual(scenario);
+    expect(store.scenario(legacyVersion).evidence).toEqual(
+      legacyInput.evidence,
+    );
+    expect(requestedChains).toHaveLength(5);
+    expect(
+      store.sqlite
+        .query("SELECT SUM(reserved_credits) AS credits FROM api_usage")
+        .get(),
+    ).toEqual({ credits: 37 });
+    expect(scenario.provenance?.providerVersion).toContain(
+      "smart-dex-normalizer-v1",
+    );
+    expect(scenario.assumptions.ruleVersion).toBe("smart-dex-accumulation-v1");
+  });
+});
+
+function dexRow(
+  address = "0x1111111111111111111111111111111111111111",
+  boughtTokens = 100,
+  soldTokens = 20,
+  boughtUsd = 200,
+  soldUsd = 100,
+) {
+  return {
+    address,
+    is_smart_money: true,
+    bought_token_volume: boughtTokens,
+    sold_token_volume: soldTokens,
+    gross_token_volume: boughtTokens + soldTokens,
+    bought_volume_usd: boughtUsd,
+    sold_volume_usd: soldUsd,
+    gross_volume_usd: boughtUsd + soldUsd,
+  };
+}
+
+function dexPage(data: ReturnType<typeof dexRow>[]) {
+  return { data, pagination: { is_last_page: true } };
+}
+
+describe("historical DEX wallet boundary", () => {
+  it("unions full records and deduplicates EVM casing without losing sold volume", () => {
+    const row = dexRow("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd");
+    const result = normalizeDex(
+      dexPage([
+        row,
+        { ...row, address: row.address.toUpperCase().replace("0X", "0x") },
+      ]),
+      dexPage([
+        dexRow("0x2222222222222222222222222222222222222222", 40, 80, 50, 200),
+      ]),
+      "ethereum",
+    );
+    expect(result.wallets).toEqual([
+      { boughtTokens: 100, soldTokens: 20, grossUsd: 300 },
+      { boughtTokens: 40, soldTokens: 80, grossUsd: 250 },
+    ]);
+  });
+
+  it("keeps case-distinct Solana wallets and token direction separate from USD direction", () => {
+    const first = dexRow("So11111111111111111111111111111111111111112", 10, 20);
+    const second = {
+      ...first,
+      address: "so11111111111111111111111111111111111111112",
+    };
+    expect(
+      normalizeDex(dexPage([first, second]), dexPage([]), "solana").wallets,
+    ).toHaveLength(2);
+  });
+
+  it.each([
+    ["missing pagination", { data: [dexRow()] }],
+    [
+      "missing amount",
+      dexPage([{ ...dexRow(), sold_token_volume: undefined } as never]),
+    ],
+    ["wrong smart status", dexPage([{ ...dexRow(), is_smart_money: false }])],
+    ["invalid address", dexPage([dexRow("invented-invalid-address")])],
+    ["wrong USD side", dexPage([dexRow(undefined, 100, 20, 10, 100)])],
+    ["inconsistent gross", dexPage([{ ...dexRow(), gross_token_volume: 1 }])],
+    ["negative amount", dexPage([{ ...dexRow(), sold_token_volume: -1 }])],
+    ["conflicting duplicate", dexPage([dexRow(), dexRow(undefined, 101)])],
+  ])("makes %s unavailable", (_name, raw) => {
+    expect(normalizeDex(raw, dexPage([]), "ethereum")).toEqual({
+      wallets: null,
+      reason: "INVALID_DEX",
+    });
+  });
+
+  it("rejects cross-side membership and incomplete pages without returning a partial union", () => {
+    expect(
+      normalizeDex(dexPage([dexRow()]), dexPage([dexRow()]), "ethereum")
+        .wallets,
+    ).toBeNull();
+    expect(
+      normalizeDex(
+        dexPage([dexRow()]),
+        { data: [], pagination: { is_last_page: false } },
+        "ethereum",
+      ),
+    ).toEqual({ wallets: null, reason: "INCOMPLETE_DEX" });
+    expect(
+      normalizeDex(
+        { ...dexPage([dexRow()]), warnings: ["private provider warning"] },
+        dexPage([]),
+        "ethereum",
+      ).wallets,
+    ).toBeNull();
+    expect(normalizeDex(dexPage([]), dexPage([]), "ethereum").wallets).toEqual(
+      [],
+    );
   });
 });

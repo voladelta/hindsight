@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { publicRound } from "../../src/domain/dto";
-import type { Round } from "../../src/domain/model";
+import { scenarioSchema, type Round } from "../../src/domain/model";
+import { measurement } from "../../src/domain/engine";
 import { fixtureScenario } from "../fixtures/scenario";
 
 const rounds: Round[] = [
@@ -25,6 +26,38 @@ const rounds: Round[] = [
 ];
 
 describe("stage-specific response objects", () => {
+  it("preserves legacy stored evidence and rejects a mismatched rule version", () => {
+    const current = fixtureScenario(0);
+    const old = {
+      ...current,
+      evidence: {
+        flowUsd: measurement(123),
+        balanceChangeTokens: measurement(40),
+        concentrationPercent: measurement(20),
+      },
+      assumptions: {
+        ...current.assumptions,
+        ruleVersion: "smart-flow-holder-balance-v1",
+      },
+    };
+    const scenario = scenarioSchema.parse(JSON.parse(JSON.stringify(old)));
+
+    expect(JSON.stringify(publicRound(rounds[1]!, scenario))).toContain(
+      '"flowUsd":{"status":"available","value":123}',
+    );
+    expect(JSON.stringify(publicRound(rounds[0]!, scenario))).not.toContain(
+      "flowUsd",
+    );
+    expect(
+      scenarioSchema.safeParse({ ...old, assumptions: current.assumptions })
+        .success,
+    ).toBe(false);
+    expect(
+      scenarioSchema.safeParse({ ...current, assumptions: old.assumptions })
+        .success,
+    ).toBe(false);
+  });
+
   it("keeps identity, dates, evidence, opponent, and outcomes behind their stages", () => {
     const scenario = fixtureScenario(0);
     const serialized = rounds.map((round) =>
@@ -32,9 +65,9 @@ describe("stage-specific response objects", () => {
     );
 
     expect(serialized[0]).not.toMatch(
-      /Test Fern|TST1|2026-08-02|flowUsd|opponent|outcome/,
+      /Test Fern|TST1|2026-08-02|tokenPressurePercent|buyerCount|sellerCount|grossVolumeUsd|opponent|outcome/,
     );
-    expect(serialized[1]).toContain("flowUsd");
+    expect(serialized[1]).toContain("tokenPressurePercent");
     expect(serialized[1]).not.toMatch(/Test Fern|TST1|opponent|outcome/);
     expect(serialized[2]).toContain("opponent");
     expect(serialized[2]).not.toMatch(/Test Fern|TST1|outcome/);
