@@ -228,6 +228,13 @@ test("landing page has no automatically detectable accessibility violations", as
 }) => {
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Start round" })).toBeEnabled();
+  await expect
+    .poll(() =>
+      page
+        .locator(".home-illustration")
+        .evaluate((image: HTMLImageElement) => image.naturalWidth),
+    )
+    .toBeGreaterThan(0);
 
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations).toEqual([]);

@@ -71,7 +71,7 @@ server.on("request", async (req, res) => {
       return;
     }
     const isPage = pathname === "/" || /^\/play\/[0-9a-f-]{36}$/.test(pathname);
-    const isAsset = /^\/assets\/[A-Za-z0-9_.-]+\.(js|css|woff2)$/.test(
+    const isAsset = /^\/assets\/[A-Za-z0-9_.-]+\.(js|css|png|woff2)$/.test(
       pathname,
     );
     if (!isPage && !isAsset) {
@@ -89,7 +89,9 @@ server.on("request", async (req, res) => {
           ? "text/javascript"
           : pathname.endsWith(".css")
             ? "text/css"
-            : "font/woff2",
+            : pathname.endsWith(".png")
+              ? "image/png"
+              : "font/woff2",
     );
     res.setHeader(
       "Content-Security-Policy",
