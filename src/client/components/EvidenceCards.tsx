@@ -9,9 +9,9 @@ function value(item: Measurement | undefined, unit: string) {
     maximumFractionDigits: 2,
   }).format(Math.abs(item.value));
   const sign = item.value > 0 && unit !== "%" ? "+" : item.value < 0 ? "−" : "";
-  return unit === "USD"
-    ? `${sign}$${number}`
-    : `${sign}${number}${unit === "%" ? "%" : " tokens"}`;
+  if (unit === "USD") return `${sign}$${number}`;
+  if (unit === "%") return `${sign}${number}%`;
+  return `${sign}${number} ${unit}`;
 }
 
 export function EvidenceCards({ evidence }: { evidence?: Evidence }) {
@@ -24,10 +24,10 @@ export function EvidenceCards({ evidence }: { evidence?: Evidence }) {
           item: evidence?.tokenPressurePercent,
           unit: "%",
           description:
-            "Net tokens bought divided by total tokens traded over 7 days.",
+            "Tokens bought minus tokens sold, divided by all tokens traded by the tracked wallets over seven days.",
         },
         {
-          title: "Smart Money breadth",
+          title: "Smart Money buyers and sellers",
           icon: Layers3,
           item: evidence?.buyerCount,
           unit: "wallets",
@@ -37,7 +37,7 @@ export function EvidenceCards({ evidence }: { evidence?: Evidence }) {
               ? `${evidence.buyerCount.value} buyers / ${evidence.sellerCount.value} sellers`
               : undefined,
           description:
-            "Token-net buyers versus sellers in the historical Smart Trader cohort, filtered to at least $10 net directional USD activity.",
+            "Tracked wallets that bought more tokens than they sold, compared with those that sold more. Each had at least $10 of net trading activity.",
         },
         {
           title: "DEX turnover",
@@ -45,7 +45,7 @@ export function EvidenceCards({ evidence }: { evidence?: Evidence }) {
           item: evidence?.grossVolumeUsd,
           unit: "USD",
           description:
-            "Gross USD bought plus sold by the same cohort. Activity context, not a directional vote.",
+            "Total USD value bought and sold by the tracked wallets. This shows activity, not a buy or sell signal.",
         },
         {
           title: "Top 10 concentration",
@@ -53,7 +53,7 @@ export function EvidenceCards({ evidence }: { evidence?: Evidence }) {
           item: evidence?.concentrationPercent,
           unit: "%",
           description:
-            "Share of supply held by the ten holders at the cutoff. Risk context, not a directional vote.",
+            "Share of token supply held by the ten largest holders at the cutoff. This shows concentration risk, not a buy or sell signal.",
         },
       ]
     : [
@@ -78,13 +78,13 @@ export function EvidenceCards({ evidence }: { evidence?: Evidence }) {
           item: evidence?.balanceChangeTokens,
           unit: "tokens",
           description:
-            "Their 7-day net balance change, in token units. Not proof of trades.",
+            "Their seven-day net balance change, in tokens. Balance changes do not prove trades.",
         },
       ];
   return (
     <section className="evidence-section" aria-labelledby="evidence-heading">
       <div className="section-heading">
-        <h2 id="evidence-heading">The onchain evidence</h2>
+        <h2 id="evidence-heading">Onchain evidence</h2>
         <span>
           {evidence
             ? "Historical window · 7 days"
@@ -111,9 +111,9 @@ export function EvidenceCards({ evidence }: { evidence?: Evidence }) {
               </p>
               <p>
                 {!evidence
-                  ? "Make your first call to see this evidence."
+                  ? "Make your first choice to see this evidence."
                   : item?.status === "unavailable"
-                    ? "Coverage is incomplete. Missing data is not zero."
+                    ? "Historical data is incomplete. Missing values are not zero."
                     : description}
               </p>
             </article>

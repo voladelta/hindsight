@@ -41,7 +41,7 @@ export function ResultsComparison({
   const { identity, outcome, initial, final, opponent } = round;
   const isUnscorable = outcome.status === "UNSCORABLE";
   const intraday = "holdingHours" in round.assumptions;
-  const holdingLabel = intraday ? "24-Hour" : "7-Day";
+  const holdingLabel = intraday ? "24-hour" : "7-day";
   const holdingDetail = intraday ? "24-hour holding" : "7-day holding";
   const formatInstant = (instant: string) =>
     intraday
@@ -83,8 +83,8 @@ export function ResultsComparison({
       {/* Revealed token header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-4 rounded-xl border border-border bg-card">
         <div>
-          <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
-            Historical Token
+          <span className="text-xs font-mono tracking-wider text-muted-foreground">
+            Historical token
           </span>
           <h2 className="text-xl font-bold text-foreground">
             {identity.name}{" "}
@@ -154,12 +154,12 @@ export function ResultsComparison({
           <Info className="text-muted-foreground size-5 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-foreground">
-              Unscorable scenario outcome
+              Outcome cannot be scored
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              One or more required outcome price references were unavailable or
-              invalid. In accordance with the time policy, missing prices are
-              never filled or shifted, and no numeric performance is claimed.
+              A required entry or exit price is missing or invalid. The app does
+              not substitute another price, so it cannot calculate a simulated
+              result for this round.
             </p>
           </div>
         </div>
@@ -169,7 +169,7 @@ export function ResultsComparison({
       <div className="border border-border rounded-xl overflow-hidden bg-card">
         <div className="p-3 border-b border-border bg-secondary/30 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground">
-            {holdingLabel} Holding Simulation Comparison
+            {holdingLabel} simulated results
           </h3>
           <span className="text-xs text-muted-foreground">
             $1,000 virtual start · {holdingDetail}
@@ -247,6 +247,9 @@ export function ResultsComparison({
             </tbody>
           </table>
         </div>
+        <p className="border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
+          SELL means holding cash, not opening a short position.
+        </p>
       </div>
     </div>
   );

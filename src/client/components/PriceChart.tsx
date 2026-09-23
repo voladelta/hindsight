@@ -121,7 +121,7 @@ export function PriceChart({ round }: { round: RoundDTO }) {
           {revealed && (
             <>
               <i className="legend-dot outcome-dot" />
-              Outcome · opening references
+              Outcome · opening prices
             </>
           )}
         </span>

@@ -376,16 +376,16 @@ export function App() {
               <div className="max-w-2xl space-y-4">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
                   <Sparkles className="size-3.5" />
-                  <span>Historical Decision Replay</span>
+                  <span>Historical decision replay</span>
                 </div>
                 <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-foreground leading-tight">
                   Make the call. Read the evidence. Replay the outcome.
                 </h1>
                 <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
-                  A blind historical decision game. Pick an intraday or
-                  seven-day replay, make an initial BUY or SELL call, inspect
-                  onchain evidence, keep or change your choice, and discover
-                  whether the evidence changed your simulated outcome.
+                  Practice a trading choice before you know the token or
+                  outcome. Choose BUY or SELL from a historical price chart,
+                  review onchain evidence, then keep or change your choice.
+                  Compare the simulated results after you reveal the outcome.
                 </p>
               </div>
 
@@ -401,43 +401,42 @@ export function App() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div className="p-5 rounded-xl border border-border bg-card space-y-2">
                 <div className="font-mono text-xs text-primary font-bold">
-                  01 · BLIND CALL
+                  01 · FIRST CHOICE
                 </div>
                 <h2 className="font-semibold text-foreground">
-                  Blind Price Chart
+                  Hidden token, visible prices
                 </h2>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Review 30 days of hourly or daily closing prices. Price is
-                  normalized to 100; token identity, dates, and future returns
-                  stay hidden.
+                  Review 30 days of historical prices. The first visible price
+                  starts at 100. The token, dates, and outcome stay hidden.
                 </p>
               </div>
 
               <div className="p-5 rounded-xl border border-border bg-card space-y-2">
                 <div className="font-mono text-xs text-primary font-bold">
-                  02 · ONCHAIN EVIDENCE
+                  02 · EVIDENCE
                 </div>
                 <h2 className="font-semibold text-foreground">
-                  Historical DEX Evidence
+                  Review onchain evidence
                 </h2>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Unlock Smart Money token pressure, buyer and seller breadth,
-                  DEX turnover, and top 10 supply concentration. Keep your call
-                  or change your mind, then lock your final decision.
+                  See seven days of wallet activity on decentralized exchanges
+                  (DEX) and how much supply the top ten holders owned. Keep or
+                  change your choice, then lock it.
                 </p>
               </div>
 
               <div className="p-5 rounded-xl border border-border bg-card space-y-2">
                 <div className="font-mono text-xs text-primary font-bold">
-                  03 · YOUR TIMEFRAME
+                  03 · OUTCOME
                 </div>
                 <h2 className="font-semibold text-foreground">
-                  Full Strategy Comparison
+                  Compare simulated results
                 </h2>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Reveal the 24-hour or 7-day outcome and compare your first
-                  choice, final choice, fixed-rule opponent, and always-buy
-                  baseline on $1,000 virtual USD.
+                  Reveal the next 24 hours or seven days. Compare your first and
+                  final choices with a fixed-rule opponent and an always-buy
+                  baseline, each starting with $1,000 of virtual cash.
                 </p>
               </div>
             </div>
@@ -447,9 +446,9 @@ export function App() {
                 Choose a token pool
               </legend>
               <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">
-                Pick the network you want to explore. The server chooses an
-                eligible prepared token from that pool, while its name and dates
-                stay hidden until reveal.
+                Choose a network. A prepared historical token is selected from
+                that pool. Its name and dates stay hidden until you reveal the
+                outcome.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
                 {replayNetworks.map((option) => {
@@ -491,14 +490,14 @@ export function App() {
                         </span>
                         <span className="text-[11px] font-mono text-muted-foreground">
                           {availableForDuration
-                            ? `${durationCount} replays ready`
+                            ? `${durationCount} ${durationCount === 1 ? "round" : "rounds"} ready`
                             : "Unavailable"}
                         </span>
                       </span>
                       <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
                         {availableForDuration
                           ? option.detail
-                          : `No ${roundDuration === "INTRADAY" ? "intraday" : "swing"} DEX replays prepared`}
+                          : `No ${roundDuration === "INTRADAY" ? "24-hour" : "7-day"} rounds ready`}
                       </span>
                     </label>
                   );
@@ -508,7 +507,7 @@ export function App() {
 
             <fieldset className="space-y-3">
               <legend className="text-sm font-semibold text-foreground">
-                Choose your replay duration
+                Choose a replay duration
               </legend>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
                 {(
@@ -568,7 +567,9 @@ export function App() {
                         />
                       </span>
                       <span className="mt-1 block text-xs text-muted-foreground">
-                        {available ? option.detail : "No prepared DEX replays"}
+                        {available
+                          ? option.detail
+                          : "No rounds ready for this duration"}
                       </span>
                     </label>
                   );
@@ -591,8 +592,10 @@ export function App() {
               </Button>
               <span className="text-xs text-muted-foreground">
                 {sessionReady && selectedDurationCount === 0
-                  ? `No ${roundDuration === "INTRADAY" ? "intraday" : "swing"} replays are ready for ${selectedNetwork?.label ?? "this network"}. Choose another pool or duration.`
-                  : "No real money or wallet connection required. 100% simulated execution."}
+                  ? replayNetworks.some((network) => network.preparedCount > 0)
+                    ? `No ${roundDuration === "INTRADAY" ? "24-hour" : "7-day"} rounds are ready for ${selectedNetwork?.label ?? "this network"}. Choose another network or duration.`
+                    : "No rounds are ready. Prepare historical data before starting."
+                  : "Simulation only. No wallet or real funds required."}
               </span>
             </div>
           </div>
@@ -607,7 +610,7 @@ export function App() {
                 className="py-24 text-center text-muted-foreground flex flex-col items-center justify-center gap-3"
               >
                 <RefreshCw className="size-6 animate-spin text-primary" />
-                <p className="text-sm">Loading historical scenario…</p>
+                <p className="text-sm">Loading round…</p>
               </div>
             )}
 
@@ -622,11 +625,11 @@ export function App() {
                       </span>
                       <h1 className="text-2xl font-bold text-foreground">
                         {currentRound.state === "BLIND" &&
-                          "Stage 1: Make your initial call"}
+                          "Stage 1: Make your first choice"}
                         {currentRound.state === "EVIDENCE" &&
                           "Stage 2: Review onchain evidence"}
                         {currentRound.state === "LOCKED" &&
-                          "Stage 3: Decision locked"}
+                          "Stage 3: Final choice locked"}
                         {currentRound.state === "REVEALED" &&
                           "Stage 4: Outcome revealed"}
                       </h1>
@@ -635,7 +638,7 @@ export function App() {
                       <span
                         className={`px-2.5 py-1 rounded-full ${currentRound.state === "BLIND" ? "bg-primary text-primary-foreground font-bold" : "bg-secondary text-muted-foreground"}`}
                       >
-                        1. Blind
+                        1. Choose
                       </span>
                       <ArrowRight className="size-3 text-muted-foreground" />
                       <span
@@ -647,7 +650,7 @@ export function App() {
                       <span
                         className={`px-2.5 py-1 rounded-full ${currentRound.state === "LOCKED" ? "bg-primary text-primary-foreground font-bold" : "bg-secondary text-muted-foreground"}`}
                       >
-                        3. Locked
+                        3. Lock
                       </span>
                       <ArrowRight className="size-3 text-muted-foreground" />
                       <span
@@ -661,14 +664,14 @@ export function App() {
                   <p className="text-sm text-muted-foreground">
                     {currentRound.state === "BLIND" &&
                       (currentRound.chart.unit === "hour"
-                        ? "Decide BUY or SELL from 30 days of hourly indexed price action. Hour 1 = 100."
-                        : "Decide BUY or SELL from 30 days of daily indexed price action. Day 1 = 100.")}
+                        ? "Choose BUY or SELL using 30 days of hourly prices. The first visible hour starts at 100."
+                        : "Choose BUY or SELL using 30 days of daily prices. The first visible day starts at 100.")}
                     {currentRound.state === "EVIDENCE" &&
-                      "Historical 7-day evidence is unlocked. Switch your call or keep it, then lock your final decision."}
+                      "Review seven days of historical evidence. Keep or change your choice, then lock it."}
                     {currentRound.state === "LOCKED" &&
-                      `Your final decision is locked. Inspect the fixed-rule opponent’s call, then reveal the ${currentRound.chart.unit === "hour" ? "24-hour" : "7-day"} outcome.`}
+                      `Your final choice is locked. Review the fixed-rule opponent’s choice, then reveal the ${currentRound.chart.unit === "hour" ? "24-hour" : "7-day"} outcome.`}
                     {currentRound.state === "REVEALED" &&
-                      `Explore how your decision, the opponent, and the baseline performed over the ${currentRound.chart.unit === "hour" ? "24-hour" : "7-day"} holding window.`}
+                      `Compare your choices with the opponent and always-buy baseline over the ${currentRound.chart.unit === "hour" ? "24-hour" : "7-day"} holding period.`}
                   </p>
                   <p className="mt-3 inline-flex rounded-full border border-border bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
                     {currentRound.sourceLabel}
@@ -686,14 +689,15 @@ export function App() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div>
                         <h3 className="font-semibold text-foreground">
-                          Make your initial call
+                          Make your first choice
                         </h3>
                         <p className="text-xs text-muted-foreground">
-                          Would you buy this token or sell and stay out for the
-                          next{" "}
+                          Choose BUY to simulate a purchase or SELL to hold cash
+                          for the next{" "}
                           {currentRound.chart.unit === "hour"
-                            ? "24 hours?"
-                            : "7 days?"}
+                            ? "24 hours."
+                            : "7 days."}{" "}
+                          SELL does not open a short position.
                         </p>
                       </div>
                       <span className="text-xs font-mono text-muted-foreground">
@@ -731,18 +735,18 @@ export function App() {
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                           <h3 className="font-semibold text-foreground">
-                            Revise or confirm your decision
+                            Review your choice
                           </h3>
                           <p className="text-xs text-muted-foreground">
-                            Your first call was{" "}
+                            Your first choice was{" "}
                             <span className="font-bold text-foreground font-mono">
                               {choiceLabel(currentRound.initial)}
                             </span>
-                            . Switch or keep it before locking.
+                            . Keep it or select another choice before locking.
                           </p>
                         </div>
                         <span className="text-xs font-mono text-primary">
-                          Choice active: {choiceLabel(pendingChoice)}
+                          Selected: {choiceLabel(pendingChoice)}
                         </span>
                       </div>
 
@@ -779,6 +783,11 @@ export function App() {
                         </Button>
                       </div>
 
+                      <p className="text-xs text-muted-foreground">
+                        SELL means holding cash. It does not open a short
+                        position.
+                      </p>
+
                       <div className="pt-2 flex justify-end">
                         <Button
                           size="lg"
@@ -789,7 +798,7 @@ export function App() {
                           <TrendingUp className="size-4" />
                           {submitting
                             ? "Locking…"
-                            : `Lock final decision (${choiceLabel(pendingChoice)})`}
+                            : `Lock final choice (${choiceLabel(pendingChoice)})`}
                         </Button>
                       </div>
                     </div>
@@ -802,8 +811,8 @@ export function App() {
                     {/* Opponent Card */}
                     <div className="p-5 rounded-xl border border-border bg-card space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-mono text-muted-foreground uppercase">
-                          Fixed-Rule Opponent Call
+                        <span className="text-xs font-mono text-muted-foreground">
+                          Fixed-rule opponent choice
                         </span>
                         <span
                           className={`text-xs font-mono font-bold px-2.5 py-1 rounded ${
@@ -825,8 +834,8 @@ export function App() {
                         <code className="font-mono text-foreground">
                           {currentRound.assumptions.ruleVersion}
                         </code>{" "}
-                        · Deterministic evaluation using historical evidence
-                        only. Not an AI predicting prices.
+                        · This fixed rule uses historical evidence only. It does
+                        not predict prices.
                       </p>
                     </div>
 
@@ -836,14 +845,14 @@ export function App() {
                     <div className="p-6 rounded-xl border border-border bg-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                       <div>
                         <h3 className="font-semibold text-foreground">
-                          Ready to reveal the outcome
+                          Reveal the outcome
                         </h3>
                         <p className="text-xs text-muted-foreground">
-                          Your first call:{" "}
+                          First choice:{" "}
                           <span className="font-mono text-foreground font-bold">
                             {choiceLabel(currentRound.initial)}
                           </span>{" "}
-                          → Final locked call:{" "}
+                          → Final choice:{" "}
                           <span className="font-mono text-foreground font-bold">
                             {choiceLabel(currentRound.final)}
                           </span>

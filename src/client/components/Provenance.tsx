@@ -20,11 +20,11 @@ export function Provenance({ id }: { id: string }) {
       const response = await fetch(`/api/rounds/${id}/provenance`);
       if (!response.ok)
         throw new Error(
-          "Could not load the evidence trace. Close and reopen to retry.",
+          "Could not load the round data. Close and reopen to try again.",
         );
       setData(await response.json());
     } catch {
-      setError("Could not load the evidence trace. Close and reopen to retry.");
+      setError("Could not load the round data. Close and reopen to try again.");
     }
   }
   return (
@@ -32,16 +32,17 @@ export function Provenance({ id }: { id: string }) {
       <DialogTrigger asChild>
         <Button variant="outline">
           <FileText />
-          Evidence & provenance
+          Data and assumptions
         </Button>
       </DialogTrigger>
       <DialogContent>
-        <DialogTitle className="drawer-title">Behind this round</DialogTitle>
+        <DialogTitle className="drawer-title">Data and assumptions</DialogTitle>
         <DialogDescription className="muted">
-          The frozen inputs, timing policy, and limits of this replay.
+          See the historical inputs, timing assumptions, and limits of this
+          round.
         </DialogDescription>
         {error && <p role="alert">{error}</p>}
-        {!data && !error && <p role="status">Loading evidence trace…</p>}
+        {!data && !error && <p role="status">Loading round data…</p>}
         {data && (
           <div className="provenance-content">
             <span className="source-badge">{data.source}</span>
@@ -58,15 +59,15 @@ export function Provenance({ id }: { id: string }) {
                 <br />
                 {data.exitAt}
               </dd>
-              <dt>Fixture prepared</dt>
+              <dt>Scenario prepared</dt>
               <dd>{data.preparedAt}</dd>
-              <dt>Provider retrieval</dt>
+              <dt>Data retrieved</dt>
               <dd>{data.fetchedAt ?? "None — invented fixture"}</dd>
               <dt>Rule</dt>
               <dd>{data.ruleVersion}</dd>
               <dt>Selection policy</dt>
               <dd>{data.selectionPolicy}</dd>
-              <dt>Rule output</dt>
+              <dt>Opponent choice</dt>
               <dd>{data.ruleOutput === "CASH" ? "SELL" : data.ruleOutput}</dd>
               <dt>Coverage</dt>
               <dd>

@@ -35,7 +35,7 @@ for (const [initial, final] of combinations) {
     await expect(page.getByLabel("Intraday · 24 hours")).toBeChecked();
     await page.getByRole("button", { name: "Start round" }).click();
     await expect(
-      page.getByRole("heading", { name: "Stage 1: Make your initial call" }),
+      page.getByRole("heading", { name: "Stage 1: Make your first choice" }),
     ).toBeVisible();
 
     await page
@@ -56,20 +56,20 @@ for (const [initial, final] of combinations) {
       .click();
     await page
       .getByRole("button", {
-        name: `Lock final decision (${choiceLabel(final)})`,
+        name: `Lock final choice (${choiceLabel(final)})`,
       })
       .click();
     await expect(
-      page.getByRole("heading", { name: "Stage 3: Decision locked" }),
+      page.getByRole("heading", { name: "Stage 3: Final choice locked" }),
     ).toBeVisible();
-    await expect(page.getByText("Fixed-Rule Opponent Call")).toBeVisible();
+    await expect(page.getByText("Fixed-rule opponent choice")).toBeVisible();
     await expect(
       page.getByText("smart-dex-accumulation-v1", { exact: true }),
     ).toBeVisible();
 
     await page.reload();
     await expect(
-      page.getByRole("heading", { name: "Stage 3: Decision locked" }),
+      page.getByRole("heading", { name: "Stage 3: Final choice locked" }),
     ).toBeVisible();
 
     await page.getByRole("button", { name: "Reveal next 24 hours" }).click();
@@ -79,9 +79,7 @@ for (const [initial, final] of combinations) {
     await expect(
       page.getByRole("heading", { name: /Test Fern/ }),
     ).toBeVisible();
-    await expect(
-      page.getByText("24-Hour Holding Simulation Comparison"),
-    ).toBeVisible();
+    await expect(page.getByText("24-hour simulated results")).toBeVisible();
     await expect(
       page.getByRole("columnheader", { name: "Final value" }),
     ).toBeVisible();
@@ -121,9 +119,7 @@ test("missing evidence abstains and a missing exact price stays unscorable", asy
 }) => {
   async function finishCurrentRound() {
     await page.getByRole("button", { name: "BUY", exact: true }).click();
-    await page
-      .getByRole("button", { name: "Lock final decision (BUY)" })
-      .click();
+    await page.getByRole("button", { name: "Lock final choice (BUY)" }).click();
     await page.getByRole("button", { name: "Reveal next 24 hours" }).click();
     await expect(
       page.getByRole("heading", { name: "Stage 4: Outcome revealed" }),
@@ -137,7 +133,7 @@ test("missing evidence abstains and a missing exact price stays unscorable", asy
     if (index === 1) {
       await page
         .getByRole("main")
-        .getByRole("button", { name: "Evidence & provenance" })
+        .getByRole("button", { name: "Data and assumptions" })
         .click();
       await expect(
         page.getByRole("dialog").getByText("SELL", { exact: true }),
@@ -153,14 +149,14 @@ test("missing evidence abstains and a missing exact price stays unscorable", asy
 
   await page.getByRole("button", { name: "BUY", exact: true }).click();
   await expect(page.getByText("Unavailable", { exact: true })).toHaveCount(3);
-  await page.getByRole("button", { name: "Lock final decision (BUY)" }).click();
+  await page.getByRole("button", { name: "Lock final choice (BUY)" }).click();
   await expect(page.getByText("ABSTAIN", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Reveal next 24 hours" }).click();
   await page.getByRole("button", { name: "Start new round" }).last().click();
   await page.getByRole("button", { name: "Start round" }).click();
 
   await finishCurrentRound();
-  await expect(page.getByText("Unscorable scenario outcome")).toBeVisible();
+  await expect(page.getByText("Outcome cannot be scored")).toBeVisible();
   await expect(page.getByText("N/A", { exact: true }).first()).toBeVisible();
 });
 
@@ -196,7 +192,7 @@ test("reload recovers saved choices and reveal after lost responses", async ({
   await page.goto("/");
   await page.getByRole("button", { name: "Start round", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Stage 1: Make your initial call" }),
+    page.getByRole("heading", { name: "Stage 1: Make your first choice" }),
   ).toBeVisible();
 
   for (const step of [
@@ -208,9 +204,9 @@ test("reload recovers saved choices and reveal after lost responses", async ({
     },
     {
       endpoint: "final",
-      button: "Lock final decision (BUY)",
+      button: "Lock final choice (BUY)",
       error: "Could not confirm your final choice was locked.",
-      heading: "Stage 3: Decision locked",
+      heading: "Stage 3: Final choice locked",
     },
     {
       endpoint: "reveal",
@@ -294,14 +290,12 @@ test("player can choose the seven-day replay", async ({ page }) => {
   await expect(page.getByLabel("Swing · 7 days")).toBeChecked();
   await page.getByRole("button", { name: "Start round" }).click();
 
-  await expect(page.getByText(/30 days of daily indexed/)).toBeVisible();
+  await expect(page.getByText(/30 days of daily prices/)).toBeVisible();
   await page.getByRole("button", { name: "BUY", exact: true }).click();
-  await page.getByRole("button", { name: "Lock final decision (BUY)" }).click();
+  await page.getByRole("button", { name: "Lock final choice (BUY)" }).click();
   await page.getByRole("button", { name: "Reveal next 7 days" }).click();
 
-  await expect(
-    page.getByText("7-Day Holding Simulation Comparison"),
-  ).toBeVisible();
+  await expect(page.getByText("7-day simulated results")).toBeVisible();
 });
 
 test("player can pick a supported token pool while unprepared networks stay clear", async ({
@@ -323,12 +317,12 @@ test("player can pick a supported token pool while unprepared networks stay clea
   await page.getByRole("button", { name: "Start round" }).click();
 
   await expect(
-    page.getByRole("heading", { name: "Stage 1: Make your initial call" }),
+    page.getByRole("heading", { name: "Stage 1: Make your first choice" }),
   ).toBeVisible();
   expect(roundBodies[0]).not.toContain("Ethereum");
 
   await page.getByRole("button", { name: "BUY", exact: true }).click();
-  await page.getByRole("button", { name: "Lock final decision (BUY)" }).click();
+  await page.getByRole("button", { name: "Lock final choice (BUY)" }).click();
   await page.getByRole("button", { name: "Reveal next 24 hours" }).click();
 
   await expect(page.getByText(/Chain: Ethereum/)).toBeVisible();
