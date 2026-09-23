@@ -65,6 +65,16 @@ Read [AGENTS.md](AGENTS.md) before contributing. Keep changes focused, preserve 
 
 ## Customize your own replay
 
+New to the codebase? Copy this prompt into your coding assistant from the repository root. You can add your own market or research question at the end; if you leave it as written, the assistant should choose a small first experiment.
+
+```text
+Help me build my first custom Hindsight replay. Read README.md and AGENTS.md first. I am new to this codebase, so briefly explain the historical metric and fixed comparison rule you choose, then implement one small, complete experiment using the existing Bun, React, TypeScript, and SQLite stack. If I have not specified a market or research question, choose a beginner-friendly one supported by a historical Nansen endpoint.
+
+Keep the replay blind: anchor historical evidence to the frozen cutoff and apply an assumed availability delay; show evidence only after my first choice, the opponent's choice only after my final choice, and identity and future prices only at reveal. Keep the rule deterministic, handle missing or incomplete data explicitly, and use invented fixtures for tests. Keep API keys and raw provider responses on the server. Do not make paid provider requests or publish prepared data. Update the relevant preparation, domain, response, UI, and test code, then run the repository's lint, typecheck, unit, browser, and build checks.
+
+When done, explain in plain language what changed, how I can try it locally, what each check found, any preparation credit cost, and what the historical data cannot prove. Ask me only for information that is required to proceed safely.
+```
+
 The included replay focuses on established onchain tokens. Solana screening selects Nansen's reconstructed `Memecoins` and `AI Meme` sectors; Ethereum screening uses the broader non-stablecoin universe. Both require at least $250,000 volume, $100,000 liquidity, and 30 days of token age. Selection is deterministic and does not depend on the proposed signal or future outcomes. Sector tags may be revised; they do not prove contemporaneous classification. Explicit `data:prepare-one` token requests bypass sector screening.
 
 The experimental `smart-dex-accumulation-v1` opponent uses seven days of historical DEX activity ending at the cutoff, with the existing assumed 24-hour availability delay. [Historical Who Bought/Sold](https://docs.nansen.ai/api/backtesting-data/historical-token-who-bought-sold) supplies separate BUY and SELL pages for the four Smart Trader label classes and their four legacy Smart Dex Trader equivalents. Each request uses a $10 minimum **net directional USD volume** and at most 1,000 wallets. The union is therefore a filtered cohort, not all Smart Money activity. No CEX or exchange-flow metric is requested or used.
