@@ -2,41 +2,73 @@
 
 ![A young bull learning from historical market evidence](docs/images/hindsight-banner.png)
 
-**Make the call before you know the ending.**
+**Practice onchain trading decisions before you know the ending.**
 
 **Powered by Nansen API.**
 
+Hindsight is a blind historical replay for traders. Read a masked price chart, choose **BUY** or **SELL**, inspect historical onchain evidence, and decide whether to change your call. Then reveal the token and simulated outcome. Compare your first and final choices with a fixed-rule opponent and an always-buy baseline. No wallet connection or real money.
+
+The replay makes it easier to inspect how evidence affected your decision while keeping the outcome hidden until your choices are locked. One good result does not prove good reasoning or an investment edge.
+
 > **Disclaimer:** Hindsight is for learning and educational purposes only. Nothing in this project is financial or investment advice (NFA). Do your own research (DYOR) and make your own decisions before taking any financial action.
 
-Hindsight is a practice environment for traders who want to turn early luck into durable market intuition. A lucky start can reward weak reasoning and encourage larger risks; this project creates a safer feedback loop by asking you to make a decision, examine historical Nansen evidence, and then study what happened without putting capital at risk.
+You can also clone Hindsight to test your own historical metrics and fixed comparison rules. See [Customize your own replay](#customize-your-own-replay) after your first round.
 
-It is a blind historical decision-replay game. Read a masked price chart, choose **BUY** or **SELL**, inspect historical onchain evidence, and lock your final choice before revealing the outcome. Compare your first instinct and revised decision with a fixed-rule opponent and an always-buy baseline. No wallet connection or real money.
+## Play your first round locally
 
-Hindsight is also a reference implementation you can clone and adapt to the markets, metrics, and research questions you care about. Start with the [Nansen API endpoint overview](https://docs.nansen.ai/api/overview) to see the available data, and use [Nansen Academy's beginner guides](https://academy.nansen.ai/collections/8035002-how-to-use-nansen) to build the onchain concepts behind your experiments.
+A fresh checkout has no prepared scenarios. To play locally, you need **Bun 1.4.1** (pinned in [package.json](package.json)), your own Nansen API key, and a credit budget. Preparing one screened scenario has a planning estimate of **42 Nansen credits before retries**; this is not a provider billing ceiling. If you already have privately prepared scenarios in your local database, skip steps 2 and 3.
 
-## Play locally
+1. Install dependencies and initialize the local database. Setup does not contact Nansen.
 
-Use **Bun 1.4.1**, pinned in [package.json](package.json):
+   ```bash
+   bun install --frozen-lockfile
+   test -f .env.local || cp .env.example .env.local
+   bun run setup
+   ```
 
-```bash
-bun install --frozen-lockfile
-test -f .env.local || cp .env.example .env.local
-bun run setup
-bun run dev
-```
+2. In `.env.local`, set your server-side key and local credit cap:
 
-Open [localhost:3000](http://localhost:3000). Hindsight plays prepared, cached Nansen scenarios. A deployment with prepared data can be tried immediately, but its market snapshots will age. A fresh checkout needs your own Nansen API key to prepare scenarios; setup only applies database migrations and never makes provider requests.
+   ```dotenv
+   NANSEN_API_KEY=your_nansen_api_key
+   NANSEN_MAX_CREDITS=42
+   ```
 
-For production, run `bun run build` followed by `bun run start`. Run one Bun server process with persistent SQLite storage.
+3. Prepare one Ethereum intraday scenario. Replace `YYYY-MM-DD` with a UTC date at least three days in the past so the full outcome window has elapsed. This command makes paid provider requests; both the local and command credit caps must be positive and finite.
+
+   ```bash
+   bun run data:build -- --max-credits 42 --as-of YYYY-MM-DD --count 1 --chain ethereum
+   ```
+
+4. Start the app and open [localhost:3000](http://localhost:3000).
+
+   ```bash
+   bun run dev
+   ```
+
+Run `bun run usage:report` to inspect local request accounting. Cache hits can reduce the cost; retries and uncertain requests can exhaust the local cap. See [Configuration and private data](#configuration-and-private-data) for the full credit breakdown and data-use limits.
 
 ## How it works
 
-1. Choose a Solana memecoin or exploratory Ethereum token pool and a prepared replay duration: 30 days of hourly history with a 24-hour outcome, or 30 daily candles with a seven-day outcome.
-2. Read the masked chart and record your first choice.
-3. Inspect the evidence, then lock your final choice to see the opponent's decision.
-4. Reveal the asset and outcome, compare results, and inspect the evidence provenance.
+1. Choose a prepared Solana memecoin or exploratory Ethereum token pool and a replay duration: 30 days of hourly history with a 24-hour outcome, or 30 daily candles with a seven-day outcome. The app selects a hidden token from that pool.
+2. Read the masked chart and record your first choice. The token, dates, evidence, and future prices remain hidden.
+3. Inspect seven days of historical onchain evidence, then lock your final choice. The fixed-rule opponent's choice appears after yours is locked.
+4. Reveal the asset and outcome. Compare your first and final choices with the opponent and always-buy baseline, then inspect the evidence provenance.
 
 SELL means staying out of the asset, not opening a short position. BUY uses the round's fixed execution, fee, and slippage assumptions. Rounds persist across refreshes in the same browser session.
+
+To practice deliberately, note why the chart led to your first choice. After the evidence appears, identify which metric changed your view, or why none did. At reveal, compare the reasoning behind both choices as well as their simulated results. Hindsight does not keep a decision journal; record those notes yourself if you want to compare your thinking across rounds.
+
+## Configuration and private data
+
+[.env.example](.env.example) contains the local configuration template. SQLite storage defaults to `.data/hindsight.sqlite`; local environment files and data are ignored by Git.
+
+The `data:prepare-one`, `data:build`, and `smoke:nansen` commands require both local and command credit caps. Ordinary startup, builds, and tests do not call the provider. To refresh older scenarios, run an explicit preparation command with an as-of date whose full outcome window has elapsed, then restart the app.
+
+Fresh-call planning costs are 42 credits for the first screened scenario: screener 5, two price calls 2, two DEX pages 10, and historical holders 25. Each additional scenario sharing that screener costs 37 credits; explicit `data:prepare-one` also costs 37 before retries. No extra DEX pages are fetched. Cache hits can reduce cost; retries and uncertain requests retain additional reservations and can exhaust the local cap. These estimates are not retry-inclusive billing ceilings.
+
+Prepared scenarios are private by default. Do not publish Nansen data, derived displays, demos, or screenshots unless written permission covers that exact use. The MIT license covers this repository's code; it does not grant rights to third-party data.
+
+For production, run `bun run build` followed by `bun run start`. Run one Bun server process with persistent SQLite storage.
 
 ## Development
 
@@ -93,29 +125,6 @@ To add or replace a metric:
 6. Add invented provider fixtures and regression coverage. Update credit estimates and CLI guidance if preparation costs change, then run the full verification commands above.
 
 Keep API keys and paid requests server-side. Ordinary startup, builds, and tests must remain offline, and any prepared Nansen data stays private unless you have written permission for the exact public use. For a broader introduction to Nansen features and onchain concepts, see [How to Use Nansen](https://academy.nansen.ai/collections/8035002-how-to-use-nansen).
-
-## Configuration and private data
-
-[.env.example](.env.example) contains the local configuration template. SQLite storage defaults to `.data/hindsight.sqlite`; local environment files and data are ignored by Git.
-
-To prepare historical replays—or refresh an older prepared set with more recent market conditions—add your own server-side `NANSEN_API_KEY` and set a positive finite credit budget in `.env.local`:
-
-```dotenv
-NANSEN_API_KEY=your_nansen_api_key
-NANSEN_MAX_CREDITS=42
-```
-
-Then prepare a small corpus. Replace the as-of placeholder with a UTC date whose full outcome window has already elapsed; for the default intraday replay, use a date at least three days in the past.
-
-```bash
-bun run data:build -- --max-credits 42 --as-of YYYY-MM-DD --count 1 --chain ethereum
-```
-
-Restart the app after preparation. Provider preparation is explicit and may consume Nansen credits. The `data:prepare-one`, `data:build`, and `smoke:nansen` commands require both local and command credit caps; ordinary startup, builds, and tests do not call the provider. Run `bun run usage:report` to inspect local request accounting. Credit estimates are not guaranteed billing caps.
-
-Fresh-call planning costs are 42 credits for the first screened scenario: screener 5, two price calls 2, two DEX pages 10, and historical holders 25. Each additional scenario sharing that screener costs 37 credits; explicit `data:prepare-one` also costs 37 before retries. No extra DEX pages are fetched. Cache hits can reduce cost; retries and uncertain requests retain additional reservations and can exhaust the local cap. These estimates are not retry-inclusive billing ceilings.
-
-Prepared scenarios are private by default. Do not publish Nansen data, derived displays, demos, or screenshots unless written permission covers that exact use. The MIT license covers this repository's code; it does not grant rights to third-party data.
 
 ## Limitations
 
