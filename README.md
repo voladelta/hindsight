@@ -6,9 +6,11 @@
 
 **Powered by Nansen API.**
 
-Hindsight is a blind historical replay for traders. Read a masked price chart, choose **BUY** or **SELL**, inspect historical onchain evidence, and decide whether to change your call. Then reveal the token and simulated outcome. Compare your first and final choices with a fixed-rule opponent and an always-buy baseline. No wallet connection or real money.
+Hindsight is a blind historical replay for traders learning to use Nansen data. Knowing what Smart Traders are doing is a starting point; deciding what that means for your own call takes practice.
 
-The replay makes it easier to inspect how evidence affected your decision while keeping the outcome hidden until your choices are locked. One good result does not prove good reasoning or an investment edge.
+Read a masked price chart, choose **BUY** or **SELL**, inspect historical onchain evidence, and decide whether to change your call. Then reveal the token and simulated outcome. Compare your first and final choices with a fixed-rule opponent and an always-buy baseline. No wallet connection or real money.
+
+The replay explores a practical approach to Nansen onboarding: learn a metric by using it in a decision, then review how it affected your call. As Nansen's product grows, new historical metrics could become new practice scenarios. One good result does not prove good reasoning or an investment edge.
 
 > **Disclaimer:** Hindsight is for learning and educational purposes only. Nothing in this project is financial or investment advice (NFA). Do your own research (DYOR) and make your own decisions before taking any financial action.
 
